@@ -9,6 +9,9 @@
  * VERSION HISTORY
  *
  * 0.1  (2011-03-15)  Initial release
+ * 0.2  (2011-03-20)  Removed timer type (always high precision)
+ *                    Fixed timer_ticks_per_second declaration
+ *                    Added test application
  */
 
 #include "timer.h"
@@ -42,22 +45,17 @@ void timer_lib_shutdown()
 }
 
 
-void timer_initialize( timer* time, timer_type type )
+void timer_initialize( timer* time )
 {
 	memset( time, 0, sizeof( time ) );
-	
-	time->type = type;
 
 #if defined( _WIN32 ) || defined( _WIN64 )
-	if( type == TIMER_HIGHRESOLUTION )
-		QueryPerformanceFrequency( (LARGE_INTEGER*)&time->freq );
-	else
-		time->freq = 1000;
+	QueryPerformanceFrequency( (LARGE_INTEGER*)&time->freq );
 #else
 	time->freq   = 1000000;
 #endif
 	time->oofreq = (deltatime_t)( 1.0 / (double)time->freq );
-	
+
 	timer_reset( time );
 }
 
@@ -66,8 +64,7 @@ void timer_reset( timer* time )
 {
 #if defined( _WIN32 ) || defined( _WIN64 )
 
-	if( time->type == TIMER_HIGHRESOLUTION )
-		QueryPerformanceCounter( (LARGE_INTEGER*)&time->clock );
+	QueryPerformanceCounter( (LARGE_INTEGER*)&time->clock );
 	time->ref = timeGetTime();
 
 #else
@@ -76,7 +73,7 @@ void timer_reset( timer* time )
 	int err = clock_gettime( CLOCK_REALTIME, &ts );
 	if( err < 0 )
 		return;
-	
+
 	time->clock = ( (tick_t)ts.tv_sec * 1000000ULL ) + ( ts.tv_nsec / 1000ULL );
 
 #endif
@@ -100,28 +97,20 @@ tick_t timer_elapsed_ticks( timer* time, int reset )
 	tick_t curclock = time->clock;
 	tick_t ref      = time->ref;
 
-	if( time->type == TIMER_HIGHRESOLUTION )
-		QueryPerformanceCounter( (LARGE_INTEGER*)&curclock );
+	QueryPerformanceCounter( (LARGE_INTEGER*)&curclock );
 	ref = timeGetTime();
 
 	diff    = curclock - time->clock;
 	refdiff = ref - time->ref;
 
-	if( time->type == TIMER_HIGHRESOLUTION )
-	{
-		if( refdiff < 0 )
-			refdiff = diff; //Catch looping of the millisecond counter
+	if( refdiff < 0 )
+		refdiff = (tick_t)( 1000.0 * diff * time->oofreq ); //Catch looping of the millisecond counter
 
-		timerdiff = (deltatime_t)( ( diff * time->oofreq ) - ( refdiff * 0.001 ) );
-		if( ( diff < 0 ) || ( timerdiff > 0.1 ) || ( timerdiff < -0.1 ) )
-			diff = (tick_t)( ( refdiff * 0.001 ) * time->freq ); //Performance counter messed up, transform reference to counter frequency
+	timerdiff = (deltatime_t)( ( diff * time->oofreq ) - ( refdiff * 0.001 ) );
+	if( ( diff < 0 ) || ( timerdiff > 0.1 ) || ( timerdiff < -0.1 ) )
+		diff = (tick_t)( ( refdiff * 0.001 ) * time->freq ); //Performance counter messed up, transform reference to counter frequency
 
-		dt = diff;
-	}
-	else
-	{
-		dt = ( refdiff > 0 ) ? refdiff : 0; //Stable path always use timeGetTime and catch looping
-	}
+	dt = diff;
 
 	if( reset )
 		time->ref = ref;
@@ -133,7 +122,7 @@ tick_t timer_elapsed_ticks( timer* time, int reset )
 	int err = clock_gettime( CLOCK_REALTIME, &ts );
 	if( err < 0 )
 		return;
-	
+
 	curclock = ( (tick_t)ts.tv_sec * 1000000ULL ) + ( ts.tv_nsec / 1000ULL );
 
 	dt = curclock - time->clock;
@@ -147,7 +136,7 @@ tick_t timer_elapsed_ticks( timer* time, int reset )
 }
 
 
-tick_t timericks_per_second( timer* time )
+tick_t timer_ticks_per_second( timer* time )
 {
 	return time->freq;
 }
@@ -161,14 +150,14 @@ tick_t timer_current()
 	tick_t curclock;
 	QueryPerformanceCounter( (LARGE_INTEGER*)&curclock );
 	return curclock;
-	
+
 #else
-	
+
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
 	int err = clock_gettime( CLOCK_REALTIME, &ts );
 	if( err < 0 )
 		return 0;
-	
+
 	return ( (uint64_t)ts.tv_sec * 1000000ULL ) + ( ts.tv_nsec / 1000ULL );
 
 #endif

@@ -9,6 +9,9 @@
  * VERSION HISTORY
  *
  * 0.1  (2011-03-15)  Initial release
+ * 0.2  (2011-03-20)  Removed timer type (always high precision)
+ *                    Fixed timer_ticks_per_second declaration
+ *                    Added test application
  */
 
 #pragma once
@@ -38,22 +41,9 @@ typedef uint64_t tick_t;
 typedef float deltatime_t;
 //typedef double deltatime_t;
 
-//! Timer type
-typedef enum 
-{
-	//! High resolution
-	TIMER_HIGHRESOLUTION,
-
-	//! Stable
-	TIMER_STABLE
-} timer_type;
-
 //! Timer
 typedef struct
 {
-	//! Type
-	timer_type     type;
-
 	//! Old clock
 	tick_t         clock;
 
@@ -75,9 +65,8 @@ TIMER_API void           timer_lib_initialize();
 TIMER_API void           timer_lib_shutdown();
 
 /*! Initialize timer and reset
-    \param t             Timer
-    \param type          Type */
-TIMER_API void           timer_initialize( timer* t, timer_type type );
+    \param t             Timer */
+TIMER_API void           timer_initialize( timer* t );
 
 /*! Reset timer
     \param t             Timer */
