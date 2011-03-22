@@ -12,7 +12,10 @@
  * 0.2  (2011-03-20)  Removed timer type (always high precision)
  *                    Fixed timer_ticks_per_second declaration
  *                    Added test application
- */
+ * 0.3  (2011-03-22)  Removed unused error checks in POSIX code
+ *                    Made timeGetTime fallback optional in Windows code
+ *                    Fixed check of QPC weirdness (signed issue)
+*/
 
 #pragma once
 

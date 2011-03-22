@@ -12,9 +12,14 @@
  * 0.2  (2011-03-20)  Removed timer type (always high precision)
  *                    Fixed timer_ticks_per_second declaration
  *                    Added test application
+ * 0.3  (2011-03-22)  Removed unused error checks in POSIX code
+ *                    Made timeGetTime fallback optional in Windows code
+ *                    Fixed check of QPC weirdness (signed issue)
  */
 
 #include "timer.h"
+
+#define USE_FALLBACK 0
 
 #if defined( _WIN32 ) || defined( _WIN64 )
 #  define WIN32_LEAN_AND_MEAN
@@ -31,7 +36,9 @@ static tick_t _timerlib_curtime_freq  = 0;
 void timer_lib_initialize()
 {
 #if defined( _WIN32 ) || defined( _WIN64 )
+#if USE_FALLBACK
 	timeBeginPeriod( 1U );
+#endif
 	QueryPerformanceFrequency( (LARGE_INTEGER*)&_timerlib_curtime_freq );
 #endif
 }
@@ -40,7 +47,9 @@ void timer_lib_initialize()
 void timer_lib_shutdown()
 {
 #if defined( _WIN32 ) || defined( _WIN64 )
+#if USE_FALLBACK
 	timeEndPeriod( 1 );
+#endif
 #endif
 }
 
@@ -65,15 +74,14 @@ void timer_reset( timer* time )
 #if defined( _WIN32 ) || defined( _WIN64 )
 
 	QueryPerformanceCounter( (LARGE_INTEGER*)&time->clock );
+#if USE_FALLBACK
 	time->ref = timeGetTime();
+#endif
 
 #else
 
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
-	int err = clock_gettime( CLOCK_REALTIME, &ts );
-	if( err < 0 )
-		return;
-
+	clock_gettime( CLOCK_REALTIME, &ts );
 	time->clock = ( (tick_t)ts.tv_sec * 1000000ULL ) + ( ts.tv_nsec / 1000ULL );
 
 #endif
@@ -92,36 +100,43 @@ tick_t timer_elapsed_ticks( timer* time, int reset )
 
 #if defined( _WIN32 ) || defined( _WIN64 )
 
-	tick_t diff, refdiff;
+	tick_t diff;
+#if USE_FALLBACK
+	tick_t refdiff;
 	deltatime_t timerdiff;
+#endif
 	tick_t curclock = time->clock;
 	tick_t ref      = time->ref;
 
 	QueryPerformanceCounter( (LARGE_INTEGER*)&curclock );
+#if USE_FALLBACK
 	ref = timeGetTime();
+#endif
 
-	diff    = curclock - time->clock;
+	diff = curclock - time->clock;
+#if USE_FALLBACK
 	refdiff = ref - time->ref;
 
-	if( refdiff < 0 )
+	if( ref < time->ref )
 		refdiff = (tick_t)( 1000.0 * diff * time->oofreq ); //Catch looping of the millisecond counter
 
 	timerdiff = (deltatime_t)( ( diff * time->oofreq ) - ( refdiff * 0.001 ) );
 	if( ( diff < 0 ) || ( timerdiff > 0.1 ) || ( timerdiff < -0.1 ) )
 		diff = (tick_t)( ( refdiff * 0.001 ) * time->freq ); //Performance counter messed up, transform reference to counter frequency
+#endif
 
 	dt = diff;
 
+#if USE_FALLBACK
 	if( reset )
 		time->ref = ref;
+#endif
 
 #else
 
 	tick_t curclock;
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
-	int err = clock_gettime( CLOCK_REALTIME, &ts );
-	if( err < 0 )
-		return;
+	clock_gettime( CLOCK_REALTIME, &ts );
 
 	curclock = ( (tick_t)ts.tv_sec * 1000000ULL ) + ( ts.tv_nsec / 1000ULL );
 
@@ -154,10 +169,7 @@ tick_t timer_current()
 #else
 
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
-	int err = clock_gettime( CLOCK_REALTIME, &ts );
-	if( err < 0 )
-		return 0;
-
+	clock_gettime( CLOCK_REALTIME, &ts );
 	return ( (uint64_t)ts.tv_sec * 1000000ULL ) + ( ts.tv_nsec / 1000ULL );
 
 #endif
