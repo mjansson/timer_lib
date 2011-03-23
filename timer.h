@@ -1,4 +1,4 @@
-/* timer.h  -  v0.1  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
+/* timer.h  -  v0.4  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
  * 
  * This library provides a cross-platform interface to measure
  * elapsed time with (at least) millisecond accuracy.
@@ -13,9 +13,14 @@
  *                    Fixed timer_ticks_per_second declaration
  *                    Added test application
  * 0.3  (2011-03-22)  Removed unused error checks in POSIX code
- *                    Made timeGetTime fallback optional in Windows code
+ *                    Made timeGetTime fallback optional in Windows code (define USE_FALLBACK to 1)
  *                    Fixed check of QPC weirdness (signed issue)
-*/
+ * 0.4  (2011-03-23)  timer_lib_initialize() returns non-zero if failed (no high precision timer available)
+ *                    Changed POSIX path to use CLOCK_MONOTONIC
+ *                    POSIX timer_system use CLOCK_REALTIME for actual timestamp
+ *                    Addded Mach-O path for MacOS X
+ *                    Changed POSIX path to use nanosecond frequency as returned by clock_gettime
+ */
 
 #pragma once
 
@@ -41,8 +46,8 @@ typedef uint64_t tick_t;
 #endif
 
 //! Deltatime type (float or double)
-typedef float deltatime_t;
-//typedef double deltatime_t;
+//typedef float deltatime_t;
+typedef double deltatime_t;
 
 //! Timer
 typedef struct
@@ -62,7 +67,7 @@ typedef struct
 
 
 /*! Initialize timer library */
-TIMER_API void           timer_lib_initialize();
+TIMER_API int            timer_lib_initialize();
 
 /*! Shutdown timer library */
 TIMER_API void           timer_lib_shutdown();

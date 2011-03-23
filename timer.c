@@ -1,4 +1,4 @@
-/* timer.c  -  v0.1  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
+/* timer.c  -  v0.4  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
  * 
  * This library provides a cross-platform interface to measure
  * elapsed time with (at least) millisecond accuracy.
@@ -13,19 +13,30 @@
  *                    Fixed timer_ticks_per_second declaration
  *                    Added test application
  * 0.3  (2011-03-22)  Removed unused error checks in POSIX code
- *                    Made timeGetTime fallback optional in Windows code
+ *                    Made timeGetTime fallback optional in Windows code (define USE_FALLBACK to 1)
  *                    Fixed check of QPC weirdness (signed issue)
+ * 0.4  (2011-03-23)  timer_lib_initialize() returns non-zero if failed (no high precision timer available)
+ *                    Changed POSIX path to use CLOCK_MONOTONIC
+ *                    POSIX timer_system use CLOCK_REALTIME for actual timestamp
+ *                    Addded Mach-O path for MacOS X
+ *                    Changed POSIX path to use nanosecond frequency as returned by clock_gettime
  */
 
 #include "timer.h"
 
+#ifndef USE_FALLBACK
 #define USE_FALLBACK 0
+#endif
 
 #if defined( _WIN32 ) || defined( _WIN64 )
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
+#  if USE_FALLBACK
 #  include <mmsystem.h>
+#  endif
 static tick_t _timerlib_curtime_freq  = 0;
+#elif __APPLE__
+#  include <mach/mach_time.h>
 #else
 #  include <unistd.h>
 #  include <time.h>
@@ -33,14 +44,26 @@ static tick_t _timerlib_curtime_freq  = 0;
 #endif
 
 
-void timer_lib_initialize()
+int timer_lib_initialize()
 {
 #if defined( _WIN32 ) || defined( _WIN64 )
 #if USE_FALLBACK
 	timeBeginPeriod( 1U );
 #endif
-	QueryPerformanceFrequency( (LARGE_INTEGER*)&_timerlib_curtime_freq );
+	tick_t unused;
+	if( !QueryPerformanceFrequency( (LARGE_INTEGER*)&_timerlib_curtime_freq ) ||
+	    !QueryPerformanceCounter( (LARGE_INTEGER*)&unused ) )
+		return -1;
+#elif __APPLE__
+	mach_timebase_info_data_t info;
+	if( mach_timebase_info( &info ) )
+		return -1;
+#else
+	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
+	if( clock_gettime( CLOCK_MONOTONIC, &ts ) )
+		return -1;
 #endif
+	return 0;
 }
 
 
@@ -60,8 +83,10 @@ void timer_initialize( timer* time )
 
 #if defined( _WIN32 ) || defined( _WIN64 )
 	QueryPerformanceFrequency( (LARGE_INTEGER*)&time->freq );
+#elif __APPLE__
+	time->freq   = 1000000000;
 #else
-	time->freq   = 1000000;
+	time->freq   = 1000000000;
 #endif
 	time->oofreq = (deltatime_t)( 1.0 / (double)time->freq );
 
@@ -78,11 +103,15 @@ void timer_reset( timer* time )
 	time->ref = timeGetTime();
 #endif
 
+#elif __APPLE__
+
+	absolutetime_to_nanoseconds( mach_absolute_time(), &time->clock );
+
 #else
 
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
-	clock_gettime( CLOCK_REALTIME, &ts );
-	time->clock = ( (tick_t)ts.tv_sec * 1000000ULL ) + ( ts.tv_nsec / 1000ULL );
+	clock_gettime( CLOCK_MONOTONIC, &ts );
+	time->clock = ( (tick_t)ts.tv_sec * 1000000000ULL ) + ts.tv_nsec;
 
 #endif
 }
@@ -104,9 +133,9 @@ tick_t timer_elapsed_ticks( timer* time, int reset )
 #if USE_FALLBACK
 	tick_t refdiff;
 	deltatime_t timerdiff;
+	tick_t ref      = time->ref;
 #endif
 	tick_t curclock = time->clock;
-	tick_t ref      = time->ref;
 
 	QueryPerformanceCounter( (LARGE_INTEGER*)&curclock );
 #if USE_FALLBACK
@@ -132,13 +161,20 @@ tick_t timer_elapsed_ticks( timer* time, int reset )
 		time->ref = ref;
 #endif
 
+#elif __APPLE__
+
+	tick_t curclock = time->clock;
+	absolutetime_to_nanoseconds( mach_absolute_time(), &curclock );
+
+	dt = curclock - time->clock;
+
 #else
 
 	tick_t curclock;
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
-	clock_gettime( CLOCK_REALTIME, &ts );
+	clock_gettime( CLOCK_MONOTONIC, &ts );
 
-	curclock = ( (tick_t)ts.tv_sec * 1000000ULL ) + ( ts.tv_nsec / 1000ULL );
+	curclock = ( (tick_t)ts.tv_sec * 1000000000ULL ) + ts.tv_nsec;
 
 	dt = curclock - time->clock;
 
@@ -166,11 +202,17 @@ tick_t timer_current()
 	QueryPerformanceCounter( (LARGE_INTEGER*)&curclock );
 	return curclock;
 
+#elif __APPLE__
+
+	tick_t curclock = 0;
+	absolutetime_to_nanoseconds( mach_absolute_time(), &curclock );
+	return curclock;
+
 #else
 
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
-	clock_gettime( CLOCK_REALTIME, &ts );
-	return ( (uint64_t)ts.tv_sec * 1000000ULL ) + ( ts.tv_nsec / 1000ULL );
+	clock_gettime( CLOCK_MONOTONIC, &ts );
+	return ( (uint64_t)ts.tv_sec * 1000000000ULL ) + ts.tv_nsec;
 
 #endif
 }
@@ -180,8 +222,10 @@ tick_t timer_current_ticks_per_second()
 {
 #if defined( _WIN32 ) || defined( _WIN64 )
 	return _timerlib_curtime_freq;
+#elif __APPLE__
+	return 1000000000;
 #else
-	return 1000000;
+	return 1000000000;
 #endif
 }
 
@@ -208,7 +252,17 @@ tick_t timer_system()
 	_ftime64_s( &tb );
 	return ( (tick_t)tb.time * 1000ULL ) + (tick_t)tb.millitm;
 
+#elif __APPLE__
+
+	tick_t curclock = 0;
+	absolutetime_to_nanoseconds( mach_absolute_time(), &curclock );
+	return ( curclock / 1000000ULL );
+
 #else
-	return timer_current() / 1000ULL;
+
+	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
+	clock_gettime( CLOCK_REALTIME, &ts );
+	return ( (uint64_t)ts.tv_sec * 1000ULL ) + ( ts.tv_nsec / 1000000ULL );
+
 #endif
 }
