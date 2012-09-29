@@ -94,6 +94,17 @@ void timer_initialize( timer* time )
 	timer_reset( time );
 }
 
+#if __APPLE__
+void absolutetime_to_nanoseconds (uint64_t mach_time, uint64_t* clock)
+{
+	static mach_timebase_info_data_t timebase_info;
+	if (timebase_info.denom == 0) {
+		mach_timebase_info(&timebase_info);
+	}
+
+	*clock = mach_time * timebase_info.numer / timebase_info.denom;
+}
+#endif
 
 void timer_reset( timer* time )
 {
