@@ -1,5 +1,5 @@
 /* timer.c  -  v0.4  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
- * 
+ *
  * This library provides a cross-platform interface to measure
  * elapsed time with (at least) millisecond accuracy.
  *
@@ -37,6 +37,7 @@
 static tick_t _timerlib_curtime_freq  = 0;
 #elif __APPLE__
 #  include <mach/mach_time.h>
+#  include <string.h>
 #else
 #  include <unistd.h>
 #  include <time.h>
@@ -235,11 +236,11 @@ tick_t timer_current_ticks_per_second()
 #    include <sys/timeb.h>
 #  else
 struct __timeb64 {
-        __time64_t time;
-        unsigned short millitm;
-        short timezone;
-        short dstflag;
-        };
+	__time64_t time;
+	unsigned short millitm;
+	short timezone;
+	short dstflag;
+	};
 _CRTIMP errno_t __cdecl _ftime64_s(_Out_ struct __timeb64 * _Time);
 #  endif
 #endif
