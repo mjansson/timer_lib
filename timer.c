@@ -1,4 +1,4 @@
-/* timer.c  -  v0.4  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
+/* timer.c  -  v0.5  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
  *
  * This library provides a cross-platform interface to measure
  * elapsed time with (at least) millisecond accuracy.
@@ -20,6 +20,7 @@
  *                    POSIX timer_system use CLOCK_REALTIME for actual timestamp
  *                    Addded Mach-O path for MacOS X
  *                    Changed POSIX path to use nanosecond frequency as returned by clock_gettime
+ * 0.5  (2012-10-01)  Merged (cleaned up) MacOSX build fixes from Nicolas Léveillé
  */
 
 #include "timer.h"
@@ -38,6 +39,7 @@ static tick_t _timerlib_curtime_freq  = 0;
 #elif __APPLE__
 #  include <mach/mach_time.h>
 #  include <string.h>
+static mach_timebase_info_data_t _timerlib_info;
 #else
 #  include <unistd.h>
 #  include <time.h>
@@ -56,8 +58,7 @@ int timer_lib_initialize()
 	    !QueryPerformanceCounter( (LARGE_INTEGER*)&unused ) )
 		return -1;
 #elif __APPLE__
-	mach_timebase_info_data_t info;
-	if( mach_timebase_info( &info ) )
+	if( mach_timebase_info( &_timerlib_info ) )
 		return -1;
 #else
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
@@ -95,14 +96,9 @@ void timer_initialize( timer* time )
 }
 
 #if __APPLE__
-void absolutetime_to_nanoseconds (uint64_t mach_time, uint64_t* clock)
+static void absolutetime_to_nanoseconds (uint64_t mach_time, uint64_t* clock )
 {
-	static mach_timebase_info_data_t timebase_info;
-	if (timebase_info.denom == 0) {
-		mach_timebase_info(&timebase_info);
-	}
-
-	*clock = mach_time * timebase_info.numer / timebase_info.denom;
+	*clock = mach_time * _timerlib_info.numer / _timerlib_info.denom;
 }
 #endif
 

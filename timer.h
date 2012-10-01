@@ -1,4 +1,4 @@
-/* timer.h  -  v0.4  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
+/* timer.h  -  v0.5  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
  * 
  * This library provides a cross-platform interface to measure
  * elapsed time with (at least) millisecond accuracy.
@@ -20,6 +20,7 @@
  *                    POSIX timer_system use CLOCK_REALTIME for actual timestamp
  *                    Addded Mach-O path for MacOS X
  *                    Changed POSIX path to use nanosecond frequency as returned by clock_gettime
+ * 0.5  (2012-10-01)  Merged (cleaned up) MacOSX build fixes from Nicolas Léveillé
  */
 
 #pragma once
