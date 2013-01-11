@@ -1,4 +1,4 @@
-/* timer.h  -  v0.6  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
+/* timer.h  -  Cross-platform timer library  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
  * 
  * This library provides a cross-platform interface to measure
  * elapsed time with (at least) millisecond accuracy.
@@ -6,29 +6,14 @@
  * This library is put in the public domain; you can redistribute
  * it and/or modify it without any restrictions.
  *
- * VERSION HISTORY
- *
- * 0.1  (2011-03-15)  Initial release
- * 0.2  (2011-03-20)  Removed timer type (always high precision)
- *                    Fixed timer_ticks_per_second declaration
- *                    Added test application
- * 0.3  (2011-03-22)  Removed unused error checks in POSIX code
- *                    Made timeGetTime fallback optional in Windows code (define USE_FALLBACK to 1)
- *                    Fixed check of QPC weirdness (signed issue)
- * 0.4  (2011-03-23)  timer_lib_initialize() returns non-zero if failed (no high precision timer available)
- *                    Changed POSIX path to use CLOCK_MONOTONIC
- *                    POSIX timer_system use CLOCK_REALTIME for actual timestamp
- *                    Addded Mach-O path for MacOS X
- *                    Changed POSIX path to use nanosecond frequency as returned by clock_gettime
- * 0.5  (2012-10-01)  Merged (cleaned up) MacOSX build fixes from Nicolas Léveillé
- * 0.6  (2013-01-11)  Simplified API, only using tick_t type as timestamp and removing custom timer struct
- *                    Removed old legacy fallback code for Windows platform
  */
 
 #pragma once
 
 /*! \file timer.h
-    Timer measuring deltatimes */
+    Time measurements */
+
+#include <platform.h>
 
 #if TIMER_COMPILE
 #define TIMER_API
@@ -40,17 +25,11 @@
 #endif
 #endif
 
-//! Deltaticks type
-#if defined( _WIN32 ) || defined( _WIN64 )
-typedef unsigned __int64 tick_t;
-#else
-#include <stdint.h>
-typedef uint64_t tick_t;
-#endif
+//! Tick type
+typedef uint64_t         tick_t;
 
-//! Deltatime type (float or double)
-//typedef float deltatime_t;
-typedef double deltatime_t;
+//! Deltatime type
+typedef real             deltatime_t;
 
 
 /*! Initialize timer library */
