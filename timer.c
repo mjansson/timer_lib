@@ -48,7 +48,7 @@ int timer_lib_initialize( void )
 	_timerlib_freq = 1000000000ULL;
 #endif
 
-	_timerlib_oofreq = 1.0 / (double)_timerlib_freq;
+	_timerlib_oofreq = REAL_C(1.0) / (double)_timerlib_freq;
 
 	return 0;
 }
