@@ -1,45 +1,40 @@
 #include "timer.h"
 
 #include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
 
 
 int main( int argc, char** argv )
 {
-	timer* time;
+	tick_t start, time;
 	tick_t tick, freq, last, res;
 	
 	printf( "Timer test\n" );
 
 	timer_lib_initialize();
-	
-	time = malloc( sizeof( timer ) );
-	timer_initialize( time );
 
-	last = 0;
-	res  = 0xFFFFFFFFFFFFFFFFULL;
-	freq = timer_ticks_per_second( time );
+	last  = 0;
+	res   = 0xFFFFFFFFFFFFFFFFULL;
+	freq  = timer_ticks_per_second();
+	start = timer_current();
 	
 	while( 1 )
 	{
-		tick = timer_elapsed_ticks( time, 0 );
+		time = timer_current();
+		do {
+			tick = timer_elapsed_ticks( time );
+		} while( !tick );
 
-		if( tick > last )
-		{
-			if( tick - last < res )
-				res = tick - last;
-		}
+		if( tick < res )
+			res = tick - last;
 
 		last = tick;
 
-		if( (double)tick / (double)freq > 10.0 )
+		if( timer_elapsed( start ) > 10.0 )
 			break;
 	}
 
-	printf( "Resolution: %lfms\n", 1000.0 * (double)res / (double)freq );
+	printf( "Resolution: %lfms\n", 1000.0 * (double)timer_ticks_to_seconds( res ) );
 
-	free( time );
 	timer_lib_shutdown();
 	
 	return 0;

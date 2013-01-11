@@ -1,4 +1,4 @@
-/* timer.h  -  v0.5  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
+/* timer.h  -  v0.6  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
  * 
  * This library provides a cross-platform interface to measure
  * elapsed time with (at least) millisecond accuracy.
@@ -21,6 +21,8 @@
  *                    Addded Mach-O path for MacOS X
  *                    Changed POSIX path to use nanosecond frequency as returned by clock_gettime
  * 0.5  (2012-10-01)  Merged (cleaned up) MacOSX build fixes from Nicolas Léveillé
+ * 0.6  (2013-01-11)  Simplified API, only using tick_t type as timestamp and removing custom timer struct
+ *                    Removed old legacy fallback code for Windows platform
  */
 
 #pragma once
@@ -50,63 +52,38 @@ typedef uint64_t tick_t;
 //typedef float deltatime_t;
 typedef double deltatime_t;
 
-//! Timer
-typedef struct
-{
-	//! Old clock
-	tick_t         clock;
-
-	//! Reference
-	tick_t         ref;
-
-	//! Ticks per second
-	tick_t         freq;
-
-	//! Multiplier ( 1 / frequency )
-	deltatime_t    oofreq;
-} timer;
-
 
 /*! Initialize timer library */
-TIMER_API int            timer_lib_initialize();
+TIMER_API int            timer_lib_initialize( void );
 
 /*! Shutdown timer library */
-TIMER_API void           timer_lib_shutdown();
+TIMER_API void           timer_lib_shutdown( void );
 
-/*! Initialize timer and reset
-    \param t             Timer */
-TIMER_API void           timer_initialize( timer* t );
+/*! Get current timestamp, in ticks of system-specific frequency (queryable with timer_ticks_per_second), measured from some system-specific base timestamp
+    and not in sync with other timestamps
+    \return              Current timestamp */
+TIMER_API tick_t         timer_current( void );
 
-/*! Reset timer
-    \param t             Timer */
-TIMER_API void           timer_reset( timer* t );
-
-/*! Get elapsed time since last reset, and optionally reset timer
-    \param t             Timer
-    \param reset         Reset flag (reset if not zero)
+/*! Get elapsed time since given timestamp
+    \param t             Timestamp
     \return              Number of seconds elapsed */
-TIMER_API deltatime_t    timer_elapsed( timer* t, int reset );
+TIMER_API deltatime_t    timer_elapsed( const tick_t t );
 
-/*! Get elapsed ticks since last reset, and optionally reset timer
-    \param t             Timer
-    \param reset         Reset flag (reset if not zero)
+/*! Get elapsed ticks since given timestamp
+    \param t             Timestamp
     \return              Number of ticks elapsed */
-TIMER_API tick_t         timer_elapsed_ticks( timer* t, int reset );
+TIMER_API tick_t         timer_elapsed_ticks( const tick_t t );
 
 /*! Get timer frequency, as number of ticks per second
-    \param t             Timer
     \return              Ticks per second */
-TIMER_API tick_t         timer_ticks_per_second( timer* t );
+TIMER_API tick_t         timer_ticks_per_second( void );
 
-/*! Get current time, in ticks of system-specific frequency. Measured from some system-specific base time and not in sync with other sytem timestamps
-    \return              Current timestamp, in ticks */
-TIMER_API tick_t         timer_current();
-
-/*! Get frequency of current time ticks
-    \return              Number of ticks per second for timer_current function */
-TIMER_API tick_t         timer_current_ticks_per_second();
+/*! Get ticks as seconds (effectively calculating ticks/timer_ticks_per_second())
+	\param dt            Deltatime in ticks
+    \return              Deltatime in seconds */
+TIMER_API deltatime_t    timer_ticks_to_seconds( const tick_t dt );
 
 /*! Get system time, in milliseconds since the epoch (UNIX time)
     \return  Current timestamp, in milliseconds */
-TIMER_API tick_t         timer_system();
+TIMER_API tick_t         timer_system( void );
 

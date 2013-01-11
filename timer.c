@@ -1,5 +1,5 @@
-/* timer.c  -  v0.5  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
- *
+/* timer.h  -  v0.6  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
+ * 
  * This library provides a cross-platform interface to measure
  * elapsed time with (at least) millisecond accuracy.
  *
@@ -21,40 +21,35 @@
  *                    Addded Mach-O path for MacOS X
  *                    Changed POSIX path to use nanosecond frequency as returned by clock_gettime
  * 0.5  (2012-10-01)  Merged (cleaned up) MacOSX build fixes from Nicolas Léveillé
+ * 0.6  (2013-01-11)  Simplified API, only using tick_t type as timestamp and removing custom timer struct
+ *                    Removed old legacy fallback code for Windows platform
  */
 
 #include "timer.h"
 
-#ifndef USE_FALLBACK
-#define USE_FALLBACK 0
-#endif
-
 #if defined( _WIN32 ) || defined( _WIN64 )
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
-#  if USE_FALLBACK
-#  include <mmsystem.h>
-#  endif
-static tick_t _timerlib_curtime_freq  = 0;
+static tick_t _timerlib_freq  = 0;
 #elif __APPLE__
 #  include <mach/mach_time.h>
 #  include <string.h>
 static mach_timebase_info_data_t _timerlib_info;
+static void absolutetime_to_nanoseconds (uint64_t mach_time, uint64_t* clock ) { *clock = mach_time * _timerlib_info.numer / _timerlib_info.denom; }
 #else
 #  include <unistd.h>
 #  include <time.h>
 #  include <string.h>
 #endif
 
+static double _timerlib_oofreq  = 0;
 
-int timer_lib_initialize()
+
+int timer_lib_initialize( void )
 {
 #if defined( _WIN32 ) || defined( _WIN64 )
-#if USE_FALLBACK
-	timeBeginPeriod( 1U );
-#endif
 	tick_t unused;
-	if( !QueryPerformanceFrequency( (LARGE_INTEGER*)&_timerlib_curtime_freq ) ||
+	if( !QueryPerformanceFrequency( (LARGE_INTEGER*)&_timerlib_freq ) ||
 	    !QueryPerformanceCounter( (LARGE_INTEGER*)&unused ) )
 		return -1;
 #elif __APPLE__
@@ -65,147 +60,22 @@ int timer_lib_initialize()
 	if( clock_gettime( CLOCK_MONOTONIC, &ts ) )
 		return -1;
 #endif
+
+	_timerlib_oofreq = 1.0 / (double)timer_ticks_per_second();
+
 	return 0;
 }
 
 
-void timer_lib_shutdown()
+void timer_lib_shutdown( void )
 {
-#if defined( _WIN32 ) || defined( _WIN64 )
-#if USE_FALLBACK
-	timeEndPeriod( 1 );
-#endif
-#endif
 }
 
 
-void timer_initialize( timer* time )
-{
-	memset( time, 0, sizeof( time ) );
-
-#if defined( _WIN32 ) || defined( _WIN64 )
-	QueryPerformanceFrequency( (LARGE_INTEGER*)&time->freq );
-#elif __APPLE__
-	time->freq   = 1000000000;
-#else
-	time->freq   = 1000000000;
-#endif
-	time->oofreq = (deltatime_t)( 1.0 / (double)time->freq );
-
-	timer_reset( time );
-}
-
-#if __APPLE__
-static void absolutetime_to_nanoseconds (uint64_t mach_time, uint64_t* clock )
-{
-	*clock = mach_time * _timerlib_info.numer / _timerlib_info.denom;
-}
-#endif
-
-void timer_reset( timer* time )
+tick_t timer_current( void )
 {
 #if defined( _WIN32 ) || defined( _WIN64 )
 
-	QueryPerformanceCounter( (LARGE_INTEGER*)&time->clock );
-#if USE_FALLBACK
-	time->ref = timeGetTime();
-#endif
-
-#elif __APPLE__
-
-	absolutetime_to_nanoseconds( mach_absolute_time(), &time->clock );
-
-#else
-
-	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
-	clock_gettime( CLOCK_MONOTONIC, &ts );
-	time->clock = ( (tick_t)ts.tv_sec * 1000000000ULL ) + ts.tv_nsec;
-
-#endif
-}
-
-
-deltatime_t timer_elapsed( timer* time, int reset )
-{
-	return (deltatime_t)timer_elapsed_ticks( time, reset ) * time->oofreq;
-}
-
-
-tick_t timer_elapsed_ticks( timer* time, int reset )
-{
-	tick_t dt = 0;
-
-#if defined( _WIN32 ) || defined( _WIN64 )
-
-	tick_t diff;
-#if USE_FALLBACK
-	tick_t refdiff;
-	deltatime_t timerdiff;
-	tick_t ref      = time->ref;
-#endif
-	tick_t curclock = time->clock;
-
-	QueryPerformanceCounter( (LARGE_INTEGER*)&curclock );
-#if USE_FALLBACK
-	ref = timeGetTime();
-#endif
-
-	diff = curclock - time->clock;
-#if USE_FALLBACK
-	refdiff = ref - time->ref;
-
-	if( ref < time->ref )
-		refdiff = (tick_t)( 1000.0 * diff * time->oofreq ); //Catch looping of the millisecond counter
-
-	timerdiff = (deltatime_t)( ( diff * time->oofreq ) - ( refdiff * 0.001 ) );
-	if( ( diff < 0 ) || ( timerdiff > 0.1 ) || ( timerdiff < -0.1 ) )
-		diff = (tick_t)( ( refdiff * 0.001 ) * time->freq ); //Performance counter messed up, transform reference to counter frequency
-#endif
-
-	dt = diff;
-
-#if USE_FALLBACK
-	if( reset )
-		time->ref = ref;
-#endif
-
-#elif __APPLE__
-
-	tick_t curclock = time->clock;
-	absolutetime_to_nanoseconds( mach_absolute_time(), &curclock );
-
-	dt = curclock - time->clock;
-
-#else
-
-	tick_t curclock;
-	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
-	clock_gettime( CLOCK_MONOTONIC, &ts );
-
-	curclock = ( (tick_t)ts.tv_sec * 1000000000ULL ) + ts.tv_nsec;
-
-	dt = curclock - time->clock;
-
-#endif
-
-	if( reset )
-		time->clock = curclock;
-
-	return dt;
-}
-
-
-tick_t timer_ticks_per_second( timer* time )
-{
-	return time->freq;
-}
-
-
-tick_t timer_current()
-{
-#if defined( _WIN32 ) || defined( _WIN64 )
-
-	//TODO: Fallback to timeGetTime for messed up perf counter values
 	tick_t curclock;
 	QueryPerformanceCounter( (LARGE_INTEGER*)&curclock );
 	return curclock;
@@ -226,15 +96,58 @@ tick_t timer_current()
 }
 
 
-tick_t timer_current_ticks_per_second()
+tick_t timer_ticks_per_second( void )
 {
 #if defined( _WIN32 ) || defined( _WIN64 )
-	return _timerlib_curtime_freq;
+	return _timerlib_freq;
 #elif __APPLE__
-	return 1000000000;
+	return 1000000000ULL;
 #else
-	return 1000000000;
+	return 1000000000ULL;
 #endif
+}
+
+
+deltatime_t timer_elapsed( const tick_t t )
+{
+	return (deltatime_t)( (double)timer_elapsed_ticks( t ) * _timerlib_oofreq );
+}
+
+
+tick_t timer_elapsed_ticks( const tick_t t )
+{
+	tick_t dt = 0;
+
+#if defined( _WIN32 ) || defined( _WIN64 )
+
+	tick_t curclock = t;
+	QueryPerformanceCounter( (LARGE_INTEGER*)&curclock );
+	dt = curclock - t;
+
+#elif __APPLE__
+
+	tick_t curclock = t;
+	absolutetime_to_nanoseconds( mach_absolute_time(), &curclock );
+	dt = curclock - t;
+
+#else
+
+	tick_t curclock;
+	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
+	clock_gettime( CLOCK_MONOTONIC, &ts );
+
+	curclock = ( (tick_t)ts.tv_sec * 1000000000ULL ) + ts.tv_nsec;
+	dt = curclock - t;
+
+#endif
+
+	return dt;
+}
+
+
+deltatime_t timer_ticks_to_seconds( const tick_t dt )
+{
+	return (deltatime_t)( (double)dt * _timerlib_oofreq );
 }
 
 
@@ -252,7 +165,7 @@ _CRTIMP errno_t __cdecl _ftime64_s(_Out_ struct __timeb64 * _Time);
 #  endif
 #endif
 
-tick_t timer_system()
+tick_t timer_system( void )
 {
 #if defined( _WIN32 ) || defined( _WIN64 )
 
