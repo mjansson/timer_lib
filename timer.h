@@ -1,5 +1,5 @@
 /* timer.h  -  Cross-platform timer library  -  Public Domain  -  2011 Mattias Jansson / Rampant Pixels
- * 
+ *
  * This library provides a cross-platform interface to measure
  * elapsed time with (at least) millisecond accuracy.
  *
@@ -13,8 +13,6 @@
 /*! \file timer.h
     Time measurements */
 
-#include <platform.h>
-
 #if TIMER_COMPILE
 #define TIMER_API
 #else
@@ -25,11 +23,22 @@
 #endif
 #endif
 
+#if defined( _WIN32 ) || defined( _WIN64 )
+
+//! Tick type
+typedef unsigned __int64 tick_t;
+
+#else
+
+#include <stdint.h>
 //! Tick type
 typedef uint64_t         tick_t;
 
-//! Deltatime type
-typedef real             deltatime_t;
+#endif
+
+//! Deltatime type (float or double)
+//typedef float            deltatime_t;
+typedef double           deltatime_t;
 
 
 /*! Initialize timer library */

@@ -10,20 +10,28 @@
 
 #include "timer.h"
 
-#if PLATFORM_WINDOWS
+#define TIMER_PLATFORM_WINDOWS 0
+#define TIMER_PLATFORM_APPLE   0
+#define TIMER_PLATFORM_POSIX   0
+
+#if defined( _WIN32 ) || defined( _WIN64 )
+#  undef  TIMER_PLATFORM_WINDOWS
+#  define TIMER_PLATFORM_WINDOWS 1
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
-#elif PLATFORM_APPLE
+#elif defined( __APPLE__ )
+#  undef  TIMER_PLATFORM_APPLE
+#  define TIMER_PLATFORM_APPLE 1
 #  include <mach/mach_time.h>
 #  include <string.h>
 static mach_timebase_info_data_t _timerlib_info;
 static void absolutetime_to_nanoseconds (uint64_t mach_time, uint64_t* clock ) { *clock = mach_time * _timerlib_info.numer / _timerlib_info.denom; }
-#elif PLATFORM_POSIX
+#else
+#  undef  TIMER_PLATFORM_POSIX
+#  define TIMER_PLATFORM_POSIX 1
 #  include <unistd.h>
 #  include <time.h>
 #  include <string.h>
-#else
-#  error Not implemented on this platform!
 #endif
 
 static tick_t _timerlib_freq    = 0;
@@ -32,23 +40,23 @@ static double _timerlib_oofreq  = 0;
 
 int timer_lib_initialize( void )
 {
-#if PLATFORM_WINDOWS
+#if TIMER_PLATFORM_WINDOWS
 	tick_t unused;
 	if( !QueryPerformanceFrequency( (LARGE_INTEGER*)&_timerlib_freq ) ||
 	    !QueryPerformanceCounter( (LARGE_INTEGER*)&unused ) )
 		return -1;
-#elif PLATFORM_APPLE
+#elif TIMER_PLATFORM_APPLE
 	if( mach_timebase_info( &_timerlib_info ) )
 		return -1;
 	_timerlib_freq = 1000000000ULL;
-#elif PLATFORM_POSIX
+#elif TIMER_PLATFORM_POSIX
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
 	if( clock_gettime( CLOCK_MONOTONIC, &ts ) )
 		return -1;
 	_timerlib_freq = 1000000000ULL;
 #endif
 
-	_timerlib_oofreq = REAL_C(1.0) / (double)_timerlib_freq;
+	_timerlib_oofreq = 1.0 / (double)_timerlib_freq;
 
 	return 0;
 }
@@ -61,19 +69,19 @@ void timer_lib_shutdown( void )
 
 tick_t timer_current( void )
 {
-#if PLATFORM_WINDOWS
+#if TIMER_PLATFORM_WINDOWS
 
 	tick_t curclock;
 	QueryPerformanceCounter( (LARGE_INTEGER*)&curclock );
 	return curclock;
 
-#elif PLATFORM_APPLE
+#elif TIMER_PLATFORM_APPLE
 
 	tick_t curclock = 0;
 	absolutetime_to_nanoseconds( mach_absolute_time(), &curclock );
 	return curclock;
 
-#elif PLATFORM_POSIX
+#elif TIMER_PLATFORM_POSIX
 
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
 	clock_gettime( CLOCK_MONOTONIC, &ts );
@@ -99,19 +107,19 @@ tick_t timer_elapsed_ticks( const tick_t t )
 {
 	tick_t dt = 0;
 
-#if PLATFORM_WINDOWS
+#if TIMER_PLATFORM_WINDOWS
 
 	tick_t curclock = t;
 	QueryPerformanceCounter( (LARGE_INTEGER*)&curclock );
 	dt = curclock - t;
 
-#elif PLATFORM_APPLE
+#elif TIMER_PLATFORM_APPLE
 
 	tick_t curclock = t;
 	absolutetime_to_nanoseconds( mach_absolute_time(), &curclock );
 	dt = curclock - t;
 
-#elif PLATFORM_POSIX
+#elif TIMER_PLATFORM_POSIX
 
 	tick_t curclock;
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
@@ -132,7 +140,7 @@ deltatime_t timer_ticks_to_seconds( const tick_t dt )
 }
 
 
-#if PLATFORM_WINDOWS
+#if TIMER_PLATFORM_WINDOWS
 struct __timeb64 {
 	__time64_t time;
 	unsigned short millitm;
@@ -144,19 +152,19 @@ _CRTIMP errno_t __cdecl _ftime64_s(_Out_ struct __timeb64 * _Time);
 
 tick_t timer_system( void )
 {
-#if PLATFORM_WINDOWS
+#if TIMER_PLATFORM_WINDOWS
 
 	struct __timeb64 tb;
 	_ftime64_s( &tb );
 	return ( (tick_t)tb.time * 1000ULL ) + (tick_t)tb.millitm;
 
-#elif PLATFORM_APPLE
+#elif TIMER_PLATFORM_APPLE
 
 	tick_t curclock = 0;
 	absolutetime_to_nanoseconds( mach_absolute_time(), &curclock );
 	return ( curclock / 1000000ULL );
 
-#elif PLATFORM_POSIX
+#elif TIMER_PLATFORM_POSIX
 
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
 	clock_gettime( CLOCK_REALTIME, &ts );
