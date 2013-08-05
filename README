@@ -9,6 +9,12 @@ https://github.com/rampantpixels/timer_lib
 This library is put in the public domain; you can redistribute
 it and/or modify it without any restrictions.
 
+For a complete cross-platform application framework, look at
+the foundation library available at
+
+https://github.com/rampantpixels/foundation_lib
+
+
 VERSION HISTORY
 
  0.1  (2011-03-15)  Initial release
