@@ -24,8 +24,8 @@
 #  define TIMER_PLATFORM_APPLE 1
 #  include <mach/mach_time.h>
 #  include <string.h>
-static mach_timebase_info_data_t _timerlib_info;
-static void absolutetime_to_nanoseconds (uint64_t mach_time, uint64_t* clock ) { *clock = mach_time * _timerlib_info.numer / _timerlib_info.denom; }
+static mach_timebase_info_data_t timerlib_info;
+static void absolutetime_to_nanoseconds (uint64_t mach_time, uint64_t* clock ) { *clock = mach_time * timerlib_info.numer / timerlib_info.denom; }
 #else
 #  undef  TIMER_PLATFORM_POSIX
 #  define TIMER_PLATFORM_POSIX 1
@@ -34,29 +34,29 @@ static void absolutetime_to_nanoseconds (uint64_t mach_time, uint64_t* clock ) {
 #  include <string.h>
 #endif
 
-static tick_t _timerlib_freq    = 0;
-static double _timerlib_oofreq  = 0;
+static tick_t timerlib_freq    = 0;
+static double timerlib_oofreq  = 0;
 
 
 int timer_lib_initialize( void )
 {
 #if TIMER_PLATFORM_WINDOWS
 	tick_t unused;
-	if( !QueryPerformanceFrequency( (LARGE_INTEGER*)&_timerlib_freq ) ||
+	if( !QueryPerformanceFrequency( (LARGE_INTEGER*)&timerlib_freq ) ||
 	    !QueryPerformanceCounter( (LARGE_INTEGER*)&unused ) )
 		return -1;
 #elif TIMER_PLATFORM_APPLE
-	if( mach_timebase_info( &_timerlib_info ) )
+	if( mach_timebase_info( &timerlib_info ) )
 		return -1;
-	_timerlib_freq = 1000000000ULL;
+	timerlib_freq = 1000000000ULL;
 #elif TIMER_PLATFORM_POSIX
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
 	if( clock_gettime( CLOCK_MONOTONIC, &ts ) )
 		return -1;
-	_timerlib_freq = 1000000000ULL;
+	timerlib_freq = 1000000000ULL;
 #endif
 
-	_timerlib_oofreq = 1.0 / (double)_timerlib_freq;
+	timerlib_oofreq = 1.0 / (double)timerlib_freq;
 
 	return 0;
 }
@@ -93,13 +93,13 @@ tick_t timer_current( void )
 
 tick_t timer_ticks_per_second( void )
 {
-	return _timerlib_freq;
+	return timerlib_freq;
 }
 
 
 deltatime_t timer_elapsed( const tick_t t )
 {
-	return (deltatime_t)( (double)timer_elapsed_ticks( t ) * _timerlib_oofreq );
+	return (deltatime_t)( (double)timer_elapsed_ticks( t ) * timerlib_oofreq );
 }
 
 
@@ -136,7 +136,7 @@ tick_t timer_elapsed_ticks( const tick_t t )
 
 deltatime_t timer_ticks_to_seconds( const tick_t dt )
 {
-	return (deltatime_t)( (double)dt * _timerlib_oofreq );
+	return (deltatime_t)( (double)dt * timerlib_oofreq );
 }
 
 
